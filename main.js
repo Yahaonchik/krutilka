@@ -201,35 +201,52 @@ function handlePointerUp(event) {
     riveInstance.pointerUp(x, y);
     console.log(`Sent pointerUp to Rive: ${x}, ${y}`);
   }
+
+  // Check boolean inputs only after real click
+  setTimeout(() => {
+    checkBooleanInputs();
+  }, 50);
 }
 
 // Track previous boolean states to detect changes
 let previousBooleanStates = {};
 
-// Check for boolean input changes (alternative to events)
+// Check for boolean input changes (for click detection)
 function checkBooleanInputs() {
   if (!riveInstance) return;
 
   try {
-    const inputs = riveInstance.stateMachineInputs();
+    // Try different methods to get inputs
+    const inputs =
+      riveInstance.stateMachineInputs("State Machine 1") ||
+      riveInstance.stateMachineInputs() ||
+      riveInstance.inputs;
+
     if (inputs && inputs.length > 0) {
+      console.log("=== CHECKING BOOLEAN INPUTS ===");
       inputs.forEach((input) => {
         if (input.type === "Boolean" || input.type === "boolean") {
           const currentValue = input.value;
           const previousValue = previousBooleanStates[input.name];
 
+          console.log(
+            `Input: ${input.name}, Current: ${currentValue}, Previous: ${previousValue}`,
+          );
+
           // Check if boolean changed from false to true (click detected)
           if (currentValue === true && previousValue === false) {
-            console.log(`Boolean input changed: ${input.name} = true`);
+            console.log(`🎯 Boolean input changed: ${input.name} = true`);
             handleBooleanChange(input.name);
           }
 
           previousBooleanStates[input.name] = currentValue;
         }
       });
+    } else {
+      console.log("No inputs available in checkBooleanInputs");
     }
   } catch (error) {
-    // Silently handle errors
+    console.error("Error checking boolean inputs:", error);
   }
 }
 
@@ -237,13 +254,19 @@ function checkBooleanInputs() {
 function handleBooleanChange(inputName) {
   console.log(`Boolean trigger: ${inputName}`);
 
-  // Map your boolean input names to problems
-  if (inputName === "boolean 4" || inputName === "Boolean 4") {
-    console.log("Opening door problem overlay");
-    openProblemOverlay(1); // Door problem
-  } else if (inputName === "boolean 3" || inputName === "Boolean 3") {
-    console.log("Opening water problem overlay");
-    openProblemOverlay(2); // Water problem
+  // Map your boolean input names to problems based on your Rive setup
+  if (inputName === "Boolean 4") {
+    console.log("Opening door problem overlay (Boolean 4)");
+    openProblemOverlay(1); // Door problem - дверца клик
+  } else if (inputName === "Boolean 1") {
+    console.log("Boolean 1 clicked - no action configured");
+    // openProblemOverlay(2); // Uncomment when ready
+  } else if (inputName === "Boolean 2") {
+    console.log("Boolean 2 clicked - no action configured");
+    // openProblemOverlay(3); // Uncomment when ready
+  } else if (inputName === "Boolean 3") {
+    console.log("Boolean 3 clicked - no action configured");
+    // openProblemOverlay(4); // Uncomment when ready
   }
 }
 
@@ -251,8 +274,14 @@ function handleBooleanChange(inputName) {
 function handleStateChangeEvent(eventName, eventData) {
   console.log(`State change detected: ${eventName}`);
 
-  // Map state change names to problems
-  if (eventName === "дверца клик" || eventName === "дверца клик-") {
+  // Map timeline names to problems
+  if (eventName === "Timeline 1") {
+    console.log("Opening problem overlay 1 from Timeline 1");
+    openProblemOverlay(1);
+  } else if (eventName === "Timeline 2") {
+    console.log("Opening problem overlay 2 from Timeline 2");
+    openProblemOverlay(2);
+  } else if (eventName === "дверца клик" || eventName === "дверца клик-") {
     console.log("Opening door problem overlay from state change");
     openProblemOverlay(1);
   } else if (
@@ -317,9 +346,6 @@ function handleMouseMove(event) {
         mouseYInput.value = normalizedY;
       }
     }
-
-    // Also check boolean inputs on each mouse move
-    checkBooleanInputs();
   } catch (error) {
     // Silently handle if inputs don't exist
   }
@@ -337,14 +363,40 @@ async function loadRiveAnimation() {
         console.log("Rive animation loaded successfully");
 
         // Log all available inputs for debugging
-        const inputs = riveInstance.stateMachineInputs();
-        console.log("All available inputs:", inputs);
-        if (inputs) {
-          inputs.forEach((input) => {
+        console.log("Rive instance:", riveInstance);
+
+        try {
+          // Try different ways to access inputs
+          const inputs1 = riveInstance.stateMachineInputs();
+          const inputs2 = riveInstance.stateMachineInputs("State Machine 1");
+          const inputs3 = riveInstance.inputs;
+
+          console.log("Method 1 - stateMachineInputs():", inputs1);
+          console.log(
+            "Method 2 - stateMachineInputs('State Machine 1'):",
+            inputs2,
+          );
+          console.log("Method 3 - inputs:", inputs3);
+
+          // Try to use the one that works
+          const workingInputs = inputs1 || inputs2 || inputs3;
+
+          if (workingInputs && workingInputs.length > 0) {
+            console.log("Found working inputs:", workingInputs);
+            workingInputs.forEach((input) => {
+              console.log(
+                `Input: "${input.name}", Type: ${input.type}, Value: ${input.value}`,
+              );
+            });
+          } else {
+            console.log("No inputs found with any method");
             console.log(
-              `Input: "${input.name}", Type: ${input.type}, Value: ${input.value}`,
+              "Available state machines:",
+              riveInstance.stateMachineNames,
             );
-          });
+          }
+        } catch (error) {
+          console.error("Error accessing state machine inputs:", error);
         }
 
         riveInstance.resizeDrawingSurfaceToCanvas();
@@ -358,8 +410,23 @@ async function loadRiveAnimation() {
         canvas.addEventListener("mousedown", handlePointerDown);
         canvas.addEventListener("mouseup", handlePointerUp);
 
-        // Start monitoring boolean inputs every 50ms (faster)
-        setInterval(checkBooleanInputs, 50);
+        // Wait a bit more for state machine to be fully ready
+        setTimeout(() => {
+          console.log("=== DELAYED STATE MACHINE CHECK ===");
+          const delayedInputs =
+            riveInstance.stateMachineInputs("State Machine 1") ||
+            riveInstance.stateMachineInputs() ||
+            riveInstance.inputs;
+          console.log("Delayed inputs check:", delayedInputs);
+
+          if (delayedInputs && delayedInputs.length > 0) {
+            delayedInputs.forEach((input) => {
+              console.log(
+                `Delayed - Input: "${input.name}", Type: ${input.type}, Value: ${input.value}`,
+              );
+            });
+          }
+        }, 1000);
       },
       onLoadError: (error) => {
         console.error("Failed to load Rive animation:", error);
@@ -371,27 +438,6 @@ async function loadRiveAnimation() {
         document.body.appendChild(errorMsg);
       },
       onRiveEventReceived: handleRiveTrigger,
-      onStateChange: (event) => {
-        console.log("=== RIVE STATE CHANGE ===");
-        console.log("State change event:", event);
-        console.log("Event data array:", event.data);
-
-        if (event.data && event.data.length > 0) {
-          event.data.forEach((item, index) => {
-            console.log(`State change item ${index}:`, item);
-            console.log(`Item type:`, typeof item);
-            console.log(`Item properties:`, Object.keys(item));
-            console.log(`Item name:`, item.name);
-            console.log(`Item value:`, item.value);
-            console.log(`Item type property:`, item.type);
-
-            // Try to detect which listener was triggered
-            if (item.name && typeof item.name === "string") {
-              handleStateChangeEvent(item.name, item);
-            }
-          });
-        }
-      },
     });
   } catch (error) {
     console.error("Error initializing Rive:", error);

@@ -100,16 +100,23 @@ function handleRiveTrigger(event) {
   for (const triggerName of possibleNames) {
     console.log(`Checking trigger: "${triggerName}"`);
 
-    // Map your specific trigger names to problem numbers
+    // Handle the main trigger_1 event as described in technical documentation
+    if (triggerName === "trigger_1") {
+      console.log("trigger_1 fired - opening door problem overlay");
+      openProblemOverlay(1);
+      return;
+    }
+
+    // Legacy trigger names (keeping as fallback)
     if (triggerName === "дверца клик" || triggerName === "дверца клик-") {
-      console.log("Opening door problem overlay");
+      console.log("Opening door problem overlay (legacy)");
       openProblemOverlay(1);
       return;
     } else if (
       triggerName === "не набирает воду клик" ||
       triggerName === "не набирает воду2"
     ) {
-      console.log("Opening water problem overlay");
+      console.log("Opening water problem overlay (legacy)");
       openProblemOverlay(2);
       return;
     }
@@ -175,9 +182,14 @@ function closeProblemOverlay() {
 // Make closeProblemOverlay globally accessible
 window.closeProblemOverlay = closeProblemOverlay;
 
+// Track if we just had a click to distinguish from hover
+let justClicked = false;
+let clickTimeout = null;
+
 // Handle pointer down events
 function handlePointerDown(event) {
   console.log("Pointer/Mouse down detected");
+  justClicked = true;
 
   // Send pointer down to Rive
   if (riveInstance && riveInstance.pointerDown) {
@@ -201,6 +213,13 @@ function handlePointerUp(event) {
     riveInstance.pointerUp(x, y);
     console.log(`Sent pointerUp to Rive: ${x}, ${y}`);
   }
+
+  // Set a timeout to clear the click flag
+  if (clickTimeout) clearTimeout(clickTimeout);
+  clickTimeout = setTimeout(() => {
+    justClicked = false;
+    console.log("Click timeout - no longer just clicked");
+  }, 100);
 
   // Check boolean inputs only after real click
   setTimeout(() => {
@@ -401,14 +420,97 @@ async function loadRiveAnimation() {
 
         riveInstance.resizeDrawingSurfaceToCanvas();
 
+        // Add detailed state logging to find animation state
+        if (riveInstance.on) {
+          riveInstance.on("statechange", (event) => {
+            console.log("=== STATE CHANGE EVENT ===", event);
+            console.log("Event data:", event.data);
+            console.log("Event data length:", event.data?.length);
+
+            if (event && event.data && Array.isArray(event.data)) {
+              event.data.forEach((item, index) => {
+                console.log(`Item ${index}: "${item}" (type: ${typeof item})`);
+
+                // Look for animation state (миллисекундное состояние от trigger_1)
+                if (typeof item === "string") {
+                  // Check for animation state names
+                  if (
+                    item.toLowerCase().includes("animation") ||
+                    item.toLowerCase().includes("state") ||
+                    item === "animation state" ||
+                    item.includes("trigger")
+                  ) {
+                    console.log(
+                      "🎯 Animation state detected:",
+                      item,
+                      "- opening overlay",
+                    );
+                    openProblemOverlay(1);
+                    return;
+                  }
+
+                  // Don't open overlay for Timeline events (these are hover events)
+                  if (item === "Timeline 1" || item === "Timeline 2") {
+                    console.log("⚠️ Timeline event (hover) - ignoring:", item);
+                    return;
+                  }
+
+                  // Check for trigger_1
+                  if (item === "trigger_1") {
+                    console.log("🎯 trigger_1 found - opening overlay");
+                    openProblemOverlay(1);
+                    return;
+                  }
+
+                  // Log any other unknown states
+                  if (
+                    item !== "" &&
+                    item !== "Timeline 1" &&
+                    item !== "Timeline 2"
+                  ) {
+                    console.log("🔍 Unknown state detected:", item);
+                  }
+                }
+
+                // Check for empty string - but only if we just had a click (not hover)
+                if (item === "" && justClicked) {
+                  console.log(
+                    "🎯 Empty string detected after click (animation state) - opening overlay",
+                  );
+                  justClicked = false; // Reset flag immediately
+
+                  // Open overlay with a small delay to let animation complete
+                  setTimeout(() => {
+                    openProblemOverlay(1);
+                  }, 50);
+
+                  return;
+                } else if (item === "") {
+                  console.log(
+                    "Empty string detected but no recent click - ignoring (hover transition)",
+                  );
+                }
+              });
+            }
+          });
+
+          console.log("Added detailed state logging to find animation state");
+        } else {
+          console.log("riveInstance.on method not available");
+        }
+
         // Add mouse move listener after Rive loads
         canvas.addEventListener("mousemove", handleMouseMove);
 
-        // Add pointer down/up listeners for direct interaction
+        // Remove duplicate pointer listeners to prevent double firing
+        canvas.removeEventListener("pointerdown", handlePointerDown);
+        canvas.removeEventListener("pointerup", handlePointerUp);
+        canvas.removeEventListener("mousedown", handlePointerDown);
+        canvas.removeEventListener("mouseup", handlePointerUp);
+
+        // Add pointer listeners only once
         canvas.addEventListener("pointerdown", handlePointerDown);
         canvas.addEventListener("pointerup", handlePointerUp);
-        canvas.addEventListener("mousedown", handlePointerDown);
-        canvas.addEventListener("mouseup", handlePointerUp);
 
         // Wait a bit more for state machine to be fully ready
         setTimeout(() => {
